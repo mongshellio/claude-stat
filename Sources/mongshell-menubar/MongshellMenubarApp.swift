@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct QuotaApp: App {
+struct MongshellMenubarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {

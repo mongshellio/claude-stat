@@ -3,8 +3,10 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: UsageModel
     @ObservedObject var prefs: Preferences
+    @ObservedObject var openClaw: OpenClawModel
 
     private let intervals = [180, 300, 600, 900]
+    private let openClawIntervals = [30, 60, 120]
 
     var body: some View {
         Form {
@@ -37,12 +39,55 @@ struct SettingsView: View {
                 Toggle("25/50/75/90% 도달 알림", isOn: $prefs.notifyThresholds)
             }
 
+            Section("openclaw") {
+                openClawSection
+            }
+
             Section("계정") {
                 accountRow
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380, height: 460)
+        .frame(width: 380, height: 560)
+    }
+
+    /// openclaw controls. When openclaw isn't installed, the picker is locked
+    /// to `Claude만` and everything else is hidden behind an explanatory note.
+    @ViewBuilder private var openClawSection: some View {
+        let installed = OpenClawService.isInstalled
+
+        Picker("메뉴바 표시", selection: $prefs.menuBarTargetRaw) {
+            ForEach(MenuBarTarget.allCases, id: \.rawValue) { target in
+                Text(target.displayName).tag(target.rawValue)
+            }
+        }
+        .disabled(!installed)
+
+        if !installed {
+            Text("openclaw가 설치되어 있지 않습니다")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            LabeledContent("상태") {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(openClaw.health.dotColor)
+                        .frame(width: 8, height: 8)
+                    Text(openClaw.health.settingsLabel)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Toggle("먹통 감지 시 자동 재시작", isOn: $prefs.openClawAutoHeal)
+                .disabled(prefs.menuBarTarget == .claudeOnly)
+
+            Picker("openclaw 확인 간격", selection: $prefs.openClawPollSeconds) {
+                ForEach(openClawIntervals, id: \.self) { s in
+                    Text("\(s)초").tag(s)
+                }
+            }
+            .disabled(prefs.menuBarTarget == .claudeOnly)
+        }
     }
 
     @ViewBuilder private var accountRow: some View {

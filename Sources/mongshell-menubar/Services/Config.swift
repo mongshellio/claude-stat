@@ -42,7 +42,7 @@ enum Config {
     }
 
     /// Our own Keychain item for OAuth-login tokens.
-    static let ownKeychainService = "com.quota.tokens"
+    static let ownKeychainService = "com.mongshell.menubar.tokens"
     static let ownKeychainAccount = "oauth"
 
     static let minPollInterval: Int = 180

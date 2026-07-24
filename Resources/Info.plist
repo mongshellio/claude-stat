@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Quota</string>
+    <string>mongshell-menubar</string>
     <key>CFBundleDisplayName</key>
-    <string>Quota</string>
+    <string>mongshell-menubar</string>
     <key>CFBundleIdentifier</key>
-    <string>com.quota.app</string>
+    <string>com.mongshell.menubar</string>
     <key>CFBundleExecutable</key>
-    <string>Quota</string>
+    <string>mongshell-menubar</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -21,15 +21,15 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Quota — 비공식 Claude 사용량 표시 도구</string>
+    <string>mongshell-menubar — 비공식 Claude 사용량 표시 도구</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>com.quota.app.oauth</string>
+            <string>com.mongshell.menubar.oauth</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>quota</string>
+                <string>mongshell-menubar</string>
             </array>
         </dict>
     </array>

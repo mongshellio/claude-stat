@@ -1,5 +1,5 @@
 .build/
-Quota.app/
+mongshell-menubar.app/
 *.xcodeproj
 .DS_Store
 .swiftpm/

@@ -2,12 +2,12 @@ import SwiftUI
 import AppKit
 
 /// Offscreen PNG rendering for visual QA (no screen-recording permission
-/// needed). Triggered by the QUOTA_SNAPSHOT=<dir> env var; renders reference
+/// needed). Triggered by the MONGSHELL_SNAPSHOT=<dir> env var; renders reference
 /// images then exits.
 @MainActor
 enum SnapshotRenderer {
     static func runIfRequested() -> Bool {
-        guard let dir = ProcessInfo.processInfo.environment["QUOTA_SNAPSHOT"] else { return false }
+        guard let dir = ProcessInfo.processInfo.environment["MONGSHELL_SNAPSHOT"] else { return false }
         let base = URL(fileURLWithPath: dir)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
 
