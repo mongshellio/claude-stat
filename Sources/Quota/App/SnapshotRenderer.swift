@@ -11,8 +11,12 @@ enum SnapshotRenderer {
         let base = URL(fileURLWithPath: dir)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
 
-        write(MenuBarStrip().frame(width: 520, height: 44), to: base, "menubar_strip", scale: 3)
-        write(IconGrid(), to: base, "icon_grid", scale: 2)
+        write(MenuBarStrip(scheme: .dark).frame(width: 560, height: 44)
+                .environment(\.colorScheme, .dark),
+              to: base, "menubar_strip_dark", scale: 3)
+        write(MenuBarStrip(scheme: .light).frame(width: 560, height: 44)
+                .environment(\.colorScheme, .light),
+              to: base, "menubar_strip_light", scale: 3)
         write(PopoverPreview(), to: base, "popover", scale: 2)
 
         return true
@@ -31,51 +35,20 @@ enum SnapshotRenderer {
 
 // MARK: - Preview views
 
-/// Dark menu-bar mock showing the default (Hamster) + Donut + Ring at 3 levels.
+/// Menu-bar mock: Claude mark + `5h · 7d` text at three usage-level pairs.
 private struct MenuBarStrip: View {
+    let scheme: ColorScheme
     var body: some View {
-        HStack(spacing: 22) {
-            ForEach([(IconConcept.hamster, 20), (.donut, 60), (.ring, 95),
-                     (.battery, 45), (.liquid, 80)], id: \.1) { concept, pct in
-                HStack(spacing: 5) {
-                    UsageIconCanvas(concept: concept, usedPercent: pct,
-                                    showRemaining: false, scheme: .dark, colorCoding: true)
-                    .frame(width: concept.menuBarSize.width, height: concept.menuBarSize.height)
-                    Text("\(pct)%")
-                        .font(.system(size: 12.5, weight: .semibold)).monospacedDigit()
-                        .foregroundStyle(.white)
-                }
+        HStack(spacing: 26) {
+            ForEach([(12, 34), (62, 45), (95, 91)], id: \.0) { five, weekly in
+                MenuBarContent(fiveHourUsed: five, weeklyUsed: weekly,
+                               showRemaining: false, colorCoding: true,
+                               showPercent: true)
             }
         }
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: 0x2C2C30))
-    }
-}
-
-/// All six concepts across five usage levels, on dark, matching the handoff grid.
-private struct IconGrid: View {
-    let levels = [0, 25, 50, 75, 100]
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(IconConcept.allCases) { concept in
-                HStack(spacing: 20) {
-                    Text(concept.displayName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white).frame(width: 72, alignment: .leading)
-                    ForEach(levels, id: \.self) { pct in
-                        VStack(spacing: 6) {
-                            UsageIconCanvas(concept: concept, usedPercent: pct,
-                                            showRemaining: false, scheme: .dark, colorCoding: true)
-                            .frame(width: 40, height: 36)
-                            Text("\(pct)%").font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
-                        }.frame(width: 60)
-                    }
-                }
-            }
-        }
-        .padding(24)
-        .background(Color(hex: 0x2C2C30))
+        .background(scheme == .dark ? Color(hex: 0x2C2C30) : Color(hex: 0xE8E6E1))
     }
 }
 
