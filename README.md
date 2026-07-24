@@ -1,17 +1,18 @@
 # Quota — macOS 메뉴바 Claude 사용량 표시 앱
 
-맥 메뉴바에 Claude 사용량을 아이콘 + `NN%`로 상시 표시하고, 클릭하면 5시간 한도·7일
-한도·요금 상태를 보여주는 팝오버가 열리는 메뉴바 앱입니다. 
+맥 메뉴바에 Claude 사용량을 Claude 마크 + `5h NN% · 7d NN%`로 상시 표시하고, 클릭하면
+5시간 한도·7일 한도·요금 상태를 보여주는 팝오버가 열리는 메뉴바 앱입니다. 
 
 <img width="136" height="50" alt="image" src="https://github.com/user-attachments/assets/d01dd02e-0eff-4366-93ae-cb75ac4850f1" />
 <img width="626" height="984" alt="image" src="https://github.com/user-attachments/assets/e988ab74-489b-4530-9bf4-4559608c125f" />
 
 
 
-## 아이콘 6종
-설정에서 택1 — **Hamster**(기본, 볼이 쓸수록 쪼그라듦) / Donut / Ring / Eclipse(잠식 원반)
-/ Battery / Liquid. 색상 코딩 켜짐 시 사용량 3단계(초록 <50 · 주황 <80 · 빨강 ≥80)로
-색이 바뀌고, 90% 이상이면 아이콘이 맥동합니다. (Hamster는 항상 단색)
+## 메뉴바 표시
+**Claude 마크(테라코타 스타버스트)** + `5h NN% (14:40) · 7d NN% (일 21:59)` —
+5시간 창 사용률과 주간 전체 모델 사용률, 그리고 각 할당량의 **초기화 시각**(연한
+글자)을 동시에 표시합니다. 색상 코딩 켜짐 시 각 퍼센트 숫자가 사용량 3단계(초록 <50 ·
+주황 <80 · 빨강 ≥80)로 개별 색칠되고, 둘 중 하나라도 90% 이상이면 마크가 맥동합니다.
 
 ## 설치 — 각자 빌드해서 쓰기 (Apple 계정 불필요)
 직접 빌드한 앱은 Gatekeeper에 막히지 않습니다. 필요한 건 **macOS 14+ 와 Xcode
@@ -40,10 +41,10 @@ Sources/Quota/
   QuotaApp.swift            @main (Settings 씬은 비어 있음 — UI는 상태바+팝오버)
   App/AppDelegate.swift     NSStatusItem + NSPopover + 설정창 관리
   App/SnapshotRenderer.swift 오프스크린 PNG QA 렌더러(QUOTA_SNAPSHOT)
-  Views/UsageIconCanvas.swift 아이콘 6종 Canvas 렌더러(makeStage 공식 이식)
-  Views/MenuBarIconView.swift 상태바 아이콘+% (다크/라이트 적응, 맥동)
+  Views/ClaudeMarkView.swift Claude 스타버스트 마크 Canvas 렌더러
+  Views/MenuBarIconView.swift 상태바 마크+5h/7d % (다크/라이트 적응, 맥동)
   Views/PopoverView.swift   라이트 팝오버 308px
-  Views/SettingsView.swift  아이콘·색상·폴링·알림·계정
+  Views/SettingsView.swift  색상·폴링·알림·계정
   Models/…                  Preferences, UsageState, UsageModel(폴링/알림)
   Services/…                Config, Credentials(Keychain), UsageAPIClient, AuthService(PKCE), TimeText
 ```

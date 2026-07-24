@@ -26,12 +26,8 @@ enum Palette {
     // Accents
     static let onlineDot = Color(hex: 0x34C759)
     static let fablePurple = Color(hex: 0xAF52DE)
-
-    // Hamster silhouette / features (appearance-dependent)
-    static let hamsterLight = Color(hex: 0x2B2B30) // silhouette on light menu bar
-    static let hamsterDark  = Color(hex: 0xECEEF2) // silhouette on dark menu bar
-    static let hamsterFaceLight = Color(hex: 0xFBFBFD) // features on light silhouette
-    static let hamsterFaceDark  = Color(hex: 0x34343A) // features on dark silhouette
+    /// Claude brand terracotta — the menu-bar mark's fixed color.
+    static let claudeOrange = Color(hex: 0xD97757)
 
     /// Usage → status color, honoring the color-coding toggle.
     static func statusColor(for pct: Int, colorCoding: Bool) -> Color {

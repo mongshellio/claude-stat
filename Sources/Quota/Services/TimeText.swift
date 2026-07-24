@@ -21,6 +21,24 @@ enum TimeText {
         return "\(fmt.string(from: date)) 초기화"
     }
 
+    /// "14:40" — compact absolute reset clock for the menu bar (5h window).
+    static func clockShort(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "ko_KR")
+        fmt.dateFormat = "HH:mm"
+        return fmt.string(from: date)
+    }
+
+    /// "일 21:59" — compact weekday + reset clock for the menu bar (weekly window).
+    static func weekdayClockShort(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "ko_KR")
+        fmt.dateFormat = "E HH:mm"
+        return fmt.string(from: date)
+    }
+
     /// Absolute clock time of the last successful fetch, e.g. "오후 2:32 갱신".
     /// Empty for the sentinel `.distantPast` (sample data).
     static func updatedClock(_ date: Date) -> String {

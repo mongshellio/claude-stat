@@ -8,42 +8,22 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("아이콘") {
-                Picker("스타일", selection: Binding(
-                    get: { prefs.iconConcept },
-                    set: { prefs.iconConcept = $0 }
-                )) {
-                    ForEach(IconConcept.allCases) { c in
-                        Text(c.displayName).tag(c)
-                    }
+            Section("메뉴바") {
+                // Live preview of the bar content with the current settings.
+                LabeledContent("미리보기") {
+                    MenuBarContent(fiveHourUsed: model.snapshot.fiveHourPercent,
+                                   weeklyUsed: model.snapshot.weeklyAllPercent,
+                                   showRemaining: prefs.showRemaining,
+                                   colorCoding: prefs.colorCoding,
+                                   showPercent: prefs.showPercent,
+                                   fiveHourReset: TimeText.clockShort(model.snapshot.fiveHourResetAt),
+                                   weeklyReset: TimeText.weekdayClockShort(model.snapshot.weeklyResetAt))
                 }
-                // Live preview of the current selection at three usage levels.
-                HStack(spacing: 18) {
-                    ForEach([20, 60, 95], id: \.self) { p in
-                        VStack(spacing: 6) {
-                            UsageIconCanvas(concept: prefs.iconConcept, usedPercent: p,
-                                            showRemaining: prefs.showRemaining,
-                                            scheme: .light, colorCoding: prefs.colorCoding)
-                            .frame(width: 34, height: 32)
-                            Text("\(p)%").font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .padding(.vertical, 4)
 
                 Toggle("사용량 3단계 색상", isOn: $prefs.colorCoding)
-                    .disabled(!prefs.iconConcept.supportsColorCoding)
                 Toggle("퍼센트 텍스트 표시", isOn: $prefs.showPercent)
                 Toggle("남은 양으로 표시 (기본: 사용한 양)", isOn: $prefs.showRemaining)
                 Toggle("90% 이상일 때 아이콘 맥동", isOn: $prefs.pulseWhenCritical)
-                Picker("아이콘 기준 지표", selection: Binding(
-                    get: { prefs.menuBarMetric },
-                    set: { prefs.menuBarMetric = $0 }
-                )) {
-                    ForEach(MenuBarMetric.allCases) { m in
-                        Text(m.displayName).tag(m)
-                    }
-                }
             }
 
             Section("업데이트") {

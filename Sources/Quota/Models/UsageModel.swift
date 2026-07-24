@@ -17,14 +17,6 @@ final class UsageModel: ObservableObject {
     private var backoff: Int = 0
     private var lastNotifiedLevel = 0
 
-    /// The percent that drives the menu-bar icon, per the user's chosen metric.
-    var menuBarPercent: Int {
-        switch Preferences.shared.menuBarMetric {
-        case .fiveHour: return snapshot.fiveHourPercent
-        case .weekly:   return snapshot.weeklyAllPercent
-        }
-    }
-
     // MARK: Lifecycle
 
     func start() {
