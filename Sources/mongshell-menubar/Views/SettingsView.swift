@@ -8,6 +8,13 @@ struct SettingsView: View {
     private let intervals = [180, 300, 600, 900]
     private let openClawIntervals = [30, 60, 120]
 
+    /// Mirrors the live menu bar: the preview shows the openclaw dot only when
+    /// opted in AND installed.
+    private var openClawPreviewColor: Color? {
+        guard prefs.menuBarTarget == .claudeAndOpenClaw, OpenClawService.isInstalled else { return nil }
+        return openClaw.health.dotColor
+    }
+
     var body: some View {
         Form {
             Section("메뉴바") {
@@ -19,11 +26,11 @@ struct SettingsView: View {
                                    colorCoding: prefs.colorCoding,
                                    showPercent: prefs.showPercent,
                                    fiveHourReset: TimeText.clockShort(model.snapshot.fiveHourResetAt),
-                                   weeklyReset: TimeText.weekdayClockShort(model.snapshot.weeklyResetAt))
+                                   openClawDotColor: openClawPreviewColor)
                 }
 
                 Toggle("사용량 3단계 색상", isOn: $prefs.colorCoding)
-                Toggle("퍼센트 텍스트 표시", isOn: $prefs.showPercent)
+                Toggle("사용량 게이지·퍼센트 표시", isOn: $prefs.showPercent)
                 Toggle("남은 양으로 표시 (기본: 사용한 양)", isOn: $prefs.showRemaining)
                 Toggle("90% 이상일 때 아이콘 맥동", isOn: $prefs.pulseWhenCritical)
             }
