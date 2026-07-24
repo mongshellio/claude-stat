@@ -93,8 +93,10 @@ struct UsageAPIClient {
         return UsageSnapshot(
             fiveHourPercent: fivePct,
             fiveHourResetText: TimeText.resetsIn(fiveReset),
+            fiveHourResetAt: fiveReset,
             weeklyAllPercent: weeklyPct,
             weeklyResetText: TimeText.resetsAt(weeklyReset),
+            weeklyResetAt: weeklyReset,
             models: models,
             creditsText: creditsText(from: root),
             lastUpdated: Date()

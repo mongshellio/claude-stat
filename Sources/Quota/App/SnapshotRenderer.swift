@@ -11,10 +11,10 @@ enum SnapshotRenderer {
         let base = URL(fileURLWithPath: dir)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
 
-        write(MenuBarStrip(scheme: .dark).frame(width: 560, height: 44)
+        write(MenuBarStrip(scheme: .dark).frame(width: 700, height: 44)
                 .environment(\.colorScheme, .dark),
               to: base, "menubar_strip_dark", scale: 3)
-        write(MenuBarStrip(scheme: .light).frame(width: 560, height: 44)
+        write(MenuBarStrip(scheme: .light).frame(width: 700, height: 44)
                 .environment(\.colorScheme, .light),
               to: base, "menubar_strip_light", scale: 3)
         write(PopoverPreview(), to: base, "popover", scale: 2)
@@ -43,7 +43,8 @@ private struct MenuBarStrip: View {
             ForEach([(12, 34), (62, 45), (95, 91)], id: \.0) { five, weekly in
                 MenuBarContent(fiveHourUsed: five, weeklyUsed: weekly,
                                showRemaining: false, colorCoding: true,
-                               showPercent: true)
+                               showPercent: true,
+                               fiveHourReset: "14:40", weeklyReset: "일 21:59")
             }
         }
         .padding(.horizontal, 18)

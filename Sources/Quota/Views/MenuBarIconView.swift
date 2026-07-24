@@ -23,6 +23,8 @@ struct MenuBarIconView: View {
                        showRemaining: prefs.showRemaining,
                        colorCoding: prefs.colorCoding,
                        showPercent: prefs.showPercent,
+                       fiveHourReset: TimeText.clockShort(model.snapshot.fiveHourResetAt),
+                       weeklyReset: TimeText.weekdayClockShort(model.snapshot.weeklyResetAt),
                        pulsing: pulsing)
         .animation(shouldPulse
                    ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
@@ -41,6 +43,8 @@ struct MenuBarContent: View {
     let showRemaining: Bool
     let colorCoding: Bool
     let showPercent: Bool
+    var fiveHourReset: String? = nil
+    var weeklyReset: String? = nil
     var pulsing: Bool = false
 
     var body: some View {
@@ -50,20 +54,21 @@ struct MenuBarContent: View {
                 .scaleEffect(pulsing ? 1.14 : 1.0)
 
             if showPercent {
-                metric("5h", fiveHourUsed)
+                metric("5h", fiveHourUsed, reset: fiveHourReset)
                 Text("·")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
-                metric("7d", weeklyUsed)
+                metric("7d", weeklyUsed, reset: weeklyReset)
             }
         }
         .padding(.horizontal, 2)
         .fixedSize()
     }
 
-    /// One `label NN%` unit. The number shows consumed or remaining per the
-    /// display mode; its color always tracks risk (consumed).
-    private func metric(_ label: String, _ used: Int) -> some View {
+    /// One `label NN% (reset)` unit. The number shows consumed or remaining per
+    /// the display mode; its color always tracks risk (consumed). The reset
+    /// clock is dimmed so the percent stays the loudest element.
+    private func metric(_ label: String, _ used: Int, reset: String?) -> some View {
         HStack(spacing: 2.5) {
             Text(label)
                 .font(.system(size: 10.5, weight: .medium))
@@ -74,6 +79,12 @@ struct MenuBarContent: View {
                 .foregroundStyle(colorCoding
                                  ? Palette.statusColor(for: used, colorCoding: true)
                                  : Color.primary)
+            if let reset {
+                Text("(\(reset))")
+                    .font(.system(size: 10))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

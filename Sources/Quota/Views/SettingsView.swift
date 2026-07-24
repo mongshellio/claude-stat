@@ -15,7 +15,9 @@ struct SettingsView: View {
                                    weeklyUsed: model.snapshot.weeklyAllPercent,
                                    showRemaining: prefs.showRemaining,
                                    colorCoding: prefs.colorCoding,
-                                   showPercent: prefs.showPercent)
+                                   showPercent: prefs.showPercent,
+                                   fiveHourReset: TimeText.clockShort(model.snapshot.fiveHourResetAt),
+                                   weeklyReset: TimeText.weekdayClockShort(model.snapshot.weeklyResetAt))
                 }
 
                 Toggle("사용량 3단계 색상", isOn: $prefs.colorCoding)

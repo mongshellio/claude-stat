@@ -17,11 +17,15 @@ struct UsageSnapshot: Equatable {
     var fiveHourPercent: Int
     /// Human text like "3시간 8분 후 초기화".
     var fiveHourResetText: String
+    /// Raw reset instant of the 5-hour window — the menu bar formats this itself.
+    var fiveHourResetAt: Date?
 
     /// Weekly all-models usage, 0…100.
     var weeklyAllPercent: Int
     /// e.g. "일요일 21:59 초기화".
     var weeklyResetText: String
+    /// Raw reset instant of the weekly window.
+    var weeklyResetAt: Date?
     /// Per-model weekly rows (Opus/Fable/…).
     var models: [ModelUsage]
 
@@ -34,8 +38,13 @@ struct UsageSnapshot: Equatable {
     static let sample = UsageSnapshot(
         fiveHourPercent: 19,
         fiveHourResetText: "3시간 8분 후 초기화",
+        fiveHourResetAt: Date().addingTimeInterval(3 * 3600 + 8 * 60),
         weeklyAllPercent: 19,
         weeklyResetText: "일요일 21:59 초기화",
+        weeklyResetAt: Calendar.current.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 21, minute: 59, weekday: 1),
+            matchingPolicy: .nextTime),
         models: [ModelUsage(name: "Fable 5", percent: 25)],
         creditsText: nil,
         lastUpdated: .distantPast
