@@ -171,7 +171,7 @@ final class AuthService: NSObject {
 
     private static func debugLog(_ msg: String) {
         let line = "[\(Config.userAgent)] \(msg)\n"
-        let url = URL(fileURLWithPath: "/tmp/quota_auth.log")
+        let url = URL(fileURLWithPath: "/tmp/mongshell-menubar_auth.log")
         if let h = try? FileHandle(forWritingTo: url) {
             h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
         } else {

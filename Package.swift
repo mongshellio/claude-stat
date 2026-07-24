@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "Quota",
+    name: "mongshell-menubar",
     platforms: [
         .macOS(.v14)
     ],
     targets: [
         .executableTarget(
-            name: "Quota",
-            path: "Sources/Quota"
+            name: "mongshell-menubar",
+            path: "Sources/mongshell-menubar"
         )
     ]
 )

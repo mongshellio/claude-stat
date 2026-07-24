@@ -59,7 +59,7 @@ final class LoopbackServer {
             let callback = URL(string: "http://localhost\(path)")
 
             let html = """
-            <!doctype html><html><head><meta charset="utf-8"><title>Quota</title></head>
+            <!doctype html><html><head><meta charset="utf-8"><title>mongshell-menubar</title></head>
             <body style="font-family:-apple-system,system-ui;background:#f3f2ef;color:#1d1d1f;text-align:center;padding-top:120px">
             <h2 style="font-weight:600">로그인 완료 ✅</h2>
             <p style="color:#86868b">이 탭을 닫고 앱으로 돌아가세요.</p></body></html>

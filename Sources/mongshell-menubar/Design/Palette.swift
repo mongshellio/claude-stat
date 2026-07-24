@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Design tokens from the Quota handoff. Single source of truth for colors.
+/// Design tokens from the mongshell-menubar handoff. Single source of truth for colors.
 ///
 /// Status color logic mirrors the prototype `makeStage()`:
 ///   pct < 50 → green, pct < 80 → amber, else red. Monochrome fallback otherwise.

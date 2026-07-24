@@ -1,4 +1,4 @@
-# Quota — macOS 메뉴바 Claude 사용량 표시 앱
+# mongshell-menubar — macOS 메뉴바 Claude 사용량 표시 앱
 
 맥 메뉴바에 Claude 사용량을 Claude 마크 + `5h NN% · 7d NN%`로 상시 표시하고, 클릭하면
 5시간 한도·7일 한도·요금 상태를 보여주는 팝오버가 열리는 메뉴바 앱입니다. 
@@ -14,13 +14,21 @@
 글자)을 동시에 표시합니다. 색상 코딩 켜짐 시 각 퍼센트 숫자가 사용량 3단계(초록 <50 ·
 주황 <80 · 빨강 ≥80)로 개별 색칠되고, 둘 중 하나라도 90% 이상이면 마크가 맥동합니다.
 
+## openclaw 게이트웨이 상태 (선택 기능 — openclaw 설치 시에만 활성화)
+로컬 [openclaw](https://openclaw.ai) 게이트웨이가 설치돼 있으면 설정에서 **`Claude + openclaw`**
+를 선택해 두 번째 메뉴바 아이콘(🟢/🟡/🔴 점)으로 게이트웨이·채널 건강 상태를 함께 볼 수
+있습니다. `openclaw channels status --probe`를 파싱해 게이트웨이는 살아있어도 채널 워커만 죽은
+상태(🟡)까지 잡아내고, 클릭 팝오버에서 새로고침·하드 재시작·대시보드/로그 열기를 제공합니다.
+**openclaw가 없는 맥에서는 이 기능·아이콘·설정이 전혀 나타나지 않고 기존과 100% 동일하게
+동작합니다.**
+
 ## 설치 — 각자 빌드해서 쓰기 (Apple 계정 불필요)
 직접 빌드한 앱은 Gatekeeper에 막히지 않습니다. 필요한 건 **macOS 14+ 와 Xcode
 (또는 Command Line Tools)** 뿐.
 ```bash
-git clone <이 저장소 URL> && cd ClaudeGauge
-./scripts/make_app.sh          # release 빌드 → Quota.app 생성(로컬 ad-hoc 서명)
-open Quota.app                 # 메뉴바에 아이콘 등장
+git clone <이 저장소 URL> && cd mongshell-menubar
+./scripts/make_app.sh          # release 빌드 → mongshell-menubar.app 생성(로컬 ad-hoc 서명)
+open mongshell-menubar.app                 # 메뉴바에 아이콘 등장
 ```
 처음 실행하면:
 - **Claude Code 사용자**: "키체인 접근 허용" 프롬프트 → *항상 허용* → 바로 실제 사용량 표시.
@@ -31,22 +39,26 @@ open Quota.app                 # 메뉴바에 아이콘 등장
 
 ### 개발용
 ```bash
-./scripts/make_app.sh debug && open Quota.app          # 디버그 빌드
-swift build && QUOTA_SNAPSHOT=/tmp/quota_snaps ./.build/debug/Quota   # 아이콘/팝오버 PNG 렌더
+./scripts/make_app.sh debug && open mongshell-menubar.app          # 디버그 빌드
+swift build && MONGSHELL_SNAPSHOT=/tmp/mongshell_snaps ./.build/debug/mongshell-menubar   # 아이콘/팝오버 PNG 렌더
 ```
 
 ## 구조
 ```
-Sources/Quota/
-  QuotaApp.swift            @main (Settings 씬은 비어 있음 — UI는 상태바+팝오버)
+Sources/mongshell-menubar/
+  MongshellMenubarApp.swift            @main (Settings 씬은 비어 있음 — UI는 상태바+팝오버)
   App/AppDelegate.swift     NSStatusItem + NSPopover + 설정창 관리
-  App/SnapshotRenderer.swift 오프스크린 PNG QA 렌더러(QUOTA_SNAPSHOT)
+  App/SnapshotRenderer.swift 오프스크린 PNG QA 렌더러(MONGSHELL_SNAPSHOT)
   Views/ClaudeMarkView.swift Claude 스타버스트 마크 Canvas 렌더러
   Views/MenuBarIconView.swift 상태바 마크+5h/7d % (다크/라이트 적응, 맥동)
   Views/PopoverView.swift   라이트 팝오버 308px
-  Views/SettingsView.swift  색상·폴링·알림·계정
-  Models/…                  Preferences, UsageState, UsageModel(폴링/알림)
-  Services/…                Config, Credentials(Keychain), UsageAPIClient, AuthService(PKCE), TimeText
+  Views/SettingsView.swift  색상·폴링·알림·계정·openclaw
+  Views/OpenClawStatusView.swift  두 번째 상태바 아이콘(색 점)
+  Views/OpenClawPopoverView.swift openclaw 드롭다운(상태/PID/액션)
+  Models/…                  Preferences, UsageState, UsageModel(폴링/알림),
+                            OpenClawHealth, OpenClawModel(Process 폴링/자동복구)
+  Services/…                Config, Credentials(Keychain), UsageAPIClient, AuthService(PKCE),
+                            TimeText, OpenClawService(openclaw 셸아웃/프로브 파서)
 ```
 
 ## 데이터 소스 & 인증
@@ -81,14 +93,14 @@ Sources/Quota/
 # 인증서 확인
 security find-identity -v -p codesigning
 # 공증 자격증명 저장(앱 암호는 appleid.apple.com에서 발급)
-xcrun notarytool store-credentials quota-notary \
+xcrun notarytool store-credentials mongshell-menubar-notary \
   --apple-id "you@example.com" --team-id "TEAMID" --password "app-specific-pw"
 ```
 **릴리스:**
 ```bash
 DEV_ID="Developer ID Application: Your Name (TEAMID)" \
-NOTARY_PROFILE="quota-notary" scripts/release.sh
-# → Quota.dmg 생성. 받는 사람은 Applications로 드래그 후 실행.
+NOTARY_PROFILE="mongshell-menubar-notary" scripts/release.sh
+# → mongshell-menubar.dmg 생성. 받는 사람은 Applications로 드래그 후 실행.
 ```
 정식 Developer ID로 서명하면 **로그인 토큰이 업데이트 후에도 유지**됩니다(ad-hoc은 빌드마다
 서명이 바뀌어 재로그인 필요). 각 사용자는 자기 Claude 계정으로 로그인하며, 토큰은 각자

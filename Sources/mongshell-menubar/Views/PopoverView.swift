@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Apple-style light popover reproducing the Quota handoff (308px wide).
+/// Apple-style light popover reproducing the mongshell-menubar handoff (308px wide).
 struct PopoverView: View {
     @ObservedObject var model: UsageModel
     @ObservedObject var prefs: Preferences
@@ -38,7 +38,7 @@ struct PopoverView: View {
     private var header: some View {
         HStack(spacing: 9) {
             RingView(percent: fiveMeter.displayPercent, color: fiveMeter.color, lineWidth: 3, diameter: 18)
-            Text("Quota")
+            Text("mongshell-menubar")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Palette.textPrimary)
             Spacer(minLength: 0)
@@ -74,7 +74,7 @@ struct PopoverView: View {
                 Button("로그아웃") { model.signOut() }
             }
             Divider()
-            Button("Quota 종료") { onQuit() }
+            Button("mongshell-menubar 종료") { onQuit() }
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.system(size: 14))
