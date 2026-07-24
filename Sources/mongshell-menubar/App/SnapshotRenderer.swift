@@ -44,7 +44,7 @@ private struct MenuBarStrip: View {
                 MenuBarContent(fiveHourUsed: five, weeklyUsed: weekly,
                                showRemaining: false, colorCoding: true,
                                showPercent: true,
-                               fiveHourReset: "14:40", weeklyReset: "일 21:59")
+                               fiveHourReset: "19:00")
             }
         }
         .padding(.horizontal, 18)
@@ -57,7 +57,7 @@ private struct MenuBarStrip: View {
 private struct PopoverPreview: View {
     var body: some View {
         PopoverView(
-            model: UsageModel.shared, prefs: Preferences.shared,
+            model: UsageModel.shared, prefs: Preferences.shared, openClaw: OpenClawModel.shared,
             onOpenSettings: {}, onQuit: {}
         )
         .padding(24)

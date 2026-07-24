@@ -4,8 +4,15 @@ import SwiftUI
 struct PopoverView: View {
     @ObservedObject var model: UsageModel
     @ObservedObject var prefs: Preferences
+    @ObservedObject var openClaw: OpenClawModel
     var onOpenSettings: () -> Void
     var onQuit: () -> Void
+
+    /// openclaw info is unified into this popover only when opted in AND
+    /// installed — otherwise the popover is identical to the plain build.
+    private var showOpenClaw: Bool {
+        prefs.menuBarTarget == .claudeAndOpenClaw && OpenClawService.isInstalled
+    }
 
     private var snap: UsageSnapshot { model.snapshot }
     private var fiveMeter: Meter { Meter(usedPercent: snap.fiveHourPercent, showRemaining: prefs.showRemaining) }
@@ -21,12 +28,68 @@ struct PopoverView: View {
             primaryGauge
             hairline
             weeklySection
+            if showOpenClaw {
+                hairline
+                openClawSection
+            }
             hairline
             footer
         }
         .frame(width: 308)
         .background(Palette.popoverBG)
         .environment(\.colorScheme, .light)
+    }
+
+    // MARK: openclaw (unified section)
+
+    private var openClawSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "pawprint.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.textSecondary)
+                Text("openclaw")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.textSecondary)
+                Spacer(minLength: 8)
+                Circle()
+                    .fill(openClaw.health.dotColor)
+                    .frame(width: 7, height: 7)
+                Text(openClaw.health.shortLabel)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+
+            if let detail = openClaw.health.detailText {
+                Text(detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let pid = openClaw.pid {
+                Text("PID \(pid)")
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(Palette.textTertiary)
+            }
+
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button("새로고침") { openClaw.refreshNow() }
+                    Button("지금 재시작") { openClaw.hardRestart() }
+                }
+                HStack(spacing: 8) {
+                    Button("대시보드 열기") { openClaw.openDashboard() }
+                    Button("로그 열기") { openClaw.openLog() }
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 15)
+        .padding(.bottom, 16)
     }
 
     private var hairline: some View {
