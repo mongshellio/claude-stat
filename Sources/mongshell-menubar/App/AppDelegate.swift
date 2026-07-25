@@ -56,16 +56,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hc.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hc
 
-        // Keep the status-item width in sync with icon content.
-        model.$snapshot.receive(on: RunLoop.main).sink { [weak self] _ in self?.resizeStatusItem() }
-            .store(in: &cancellables)
+        // Keep the status-item width + hover tooltip in sync with icon content.
+        model.$snapshot.receive(on: RunLoop.main).sink { [weak self] _ in
+            self?.resizeStatusItem()
+            self?.updateTooltip()
+        }.store(in: &cancellables)
         prefs.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in
             // menuBarTarget may have flipped, which shows/hides the unified
             // openclaw indicator and changes the bar width — resize to match.
-            DispatchQueue.main.async { self?.resizeStatusItem() }
+            // showRemaining may also have flipped — refresh the tooltip's wording.
+            DispatchQueue.main.async {
+                self?.resizeStatusItem()
+                self?.updateTooltip()
+            }
         }.store(in: &cancellables)
 
         resizeStatusItem()
+        updateTooltip()
         model.start()
 
         // No-op internally if openclaw isn't installed.
@@ -76,6 +83,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hostingView.layoutSubtreeIfNeeded()
         let w = max(24, hostingView.fittingSize.width)
         statusItem.length = w
+    }
+
+    /// Two-line native hover tooltip summarizing both windows, e.g.
+    /// "5시간 사용량 19% · 3시간 8분 후 초기화\n7일 사용량 19% · 일요일 21:59 초기화".
+    /// Mirrors the popover: respects the consumed/remaining display mode and
+    /// reuses the same reset-time strings so the wording never disagrees.
+    private func updateTooltip() {
+        let snap = model.snapshot
+        let mode = prefs.showRemaining ? "남은 양" : "사용량"
+        let five = Meter(usedPercent: snap.fiveHourPercent, showRemaining: prefs.showRemaining)
+        let weekly = Meter(usedPercent: snap.weeklyAllPercent, showRemaining: prefs.showRemaining)
+
+        func line(_ window: String, _ meter: Meter, _ reset: String) -> String {
+            let head = "\(window) \(mode) \(meter.displayPercent)%"
+            return reset.isEmpty ? head : "\(head) · \(reset)"
+        }
+
+        let text = [
+            line("5시간", five, snap.fiveHourResetText),
+            line("7일", weekly, snap.weeklyResetText)
+        ].joined(separator: "\n")
+
+        // Set on both the button and the overlapping icon view so the tooltip
+        // shows wherever the cursor lands within the status item.
+        statusItem.button?.toolTip = text
+        hostingView.toolTip = text
     }
 
     @objc private func togglePopover() {
