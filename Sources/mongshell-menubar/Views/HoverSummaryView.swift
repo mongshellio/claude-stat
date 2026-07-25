@@ -12,7 +12,10 @@ struct HoverSummaryView: View {
     private var modeLabel: String { prefs.showRemaining ? "남은 양" : "사용량" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        // Grid so the three columns (label · percent · reset) line up across
+        // both rows — label and percent widths differ per row, which left an
+        // HStack ragged.
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 5) {
             row(window: "5시간", used: snap.fiveHourPercent, reset: snap.fiveHourResetText)
             row(window: "7일", used: snap.weeklyAllPercent, reset: snap.weeklyResetText)
         }
@@ -21,23 +24,26 @@ struct HoverSummaryView: View {
         .fixedSize()
     }
 
-    /// Display number follows the consumed/remaining mode via `Meter`, the
-    /// single source of truth shared with the gauges/popover; color-free text
-    /// keeps this surface minimal.
+    /// One row: label · right-aligned percent · reset. Display number follows
+    /// the consumed/remaining mode via `Meter`, the single source of truth
+    /// shared with the gauges/popover; color-free text keeps this minimal.
     private func row(window: String, used: Int, reset: String) -> some View {
         let display = Meter(usedPercent: used, showRemaining: prefs.showRemaining).displayPercent
-        return HStack(spacing: 6) {
+        return GridRow {
             Text("\(window) \(modeLabel)")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
+                .gridColumnAlignment(.leading)
             Text("\(display)%")
                 .font(.system(size: 12, weight: .semibold))
                 .monospacedDigit()
-            if !reset.isEmpty {
-                Text("· \(reset)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-            }
+                .gridColumnAlignment(.trailing)
+            // Always emit the third cell (empty when no reset) so both rows
+            // keep the same column count and stay aligned.
+            Text(reset.isEmpty ? "" : "· \(reset)")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .gridColumnAlignment(.leading)
         }
     }
 }
