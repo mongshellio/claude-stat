@@ -3,16 +3,38 @@ import AppKit
 import Combine
 
 /// An NSHostingView that lets mouse events fall through to the status-item
-/// button underneath, so the button's click action still fires while the
-/// SwiftUI icon keeps animating (e.g. the ≥90% pulse).
+/// button underneath (so the button's click action still fires while the
+/// SwiftUI icon keeps animating, e.g. the ≥90% pulse), while tracking cursor
+/// enter/exit over the icon to drive the instant hover summary.
 final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
+    var onMouseEntered: (() -> Void)?
+    var onMouseExited: (() -> Void)?
+    private var hoverTracking: NSTrackingArea?
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTracking { removeTrackingArea(hoverTracking) }
+        // .inVisibleRect keeps the area glued to the (dynamically resized) icon
+        // bounds with no manual recompute. hitTest returning nil above doesn't
+        // affect tracking-area enter/exit delivery to this owner.
+        let area = NSTrackingArea(rect: .zero,
+                                  options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                  owner: self)
+        addTrackingArea(area)
+        hoverTracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onMouseEntered?() }
+    override func mouseExited(with event: NSEvent) { onMouseExited?() }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var hoverPopover: NSPopover!
     private var settingsWindow: NSWindow?
     private var hostingView: PassthroughHostingView<MenuBarIconView>!
     private var cancellables = Set<AnyCancellable>()
@@ -56,23 +78,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hc.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hc
 
-        // Keep the status-item width + hover tooltip in sync with icon content.
-        model.$snapshot.receive(on: RunLoop.main).sink { [weak self] _ in
-            self?.resizeStatusItem()
-            self?.updateTooltip()
-        }.store(in: &cancellables)
+        // Instant hover summary: a lightweight popover shown the moment the
+        // cursor enters the icon and closed when it leaves — no native-tooltip
+        // delay. .transient lets AppKit also dismiss it on app switch / outside
+        // interaction, so it can't linger if mouseExited never fires (e.g.
+        // Cmd-Tab away without moving the cursor); the tracking-area callbacks
+        // below drive the normal show/close.
+        hoverPopover = NSPopover()
+        hoverPopover.behavior = .transient
+        hoverPopover.animates = false
+        let hoverHC = NSHostingController(rootView: HoverSummaryView(model: model, prefs: prefs))
+        hoverHC.sizingOptions = [.preferredContentSize]
+        hoverPopover.contentViewController = hoverHC
+        hostingView.onMouseEntered = { [weak self] in self?.showHoverSummary() }
+        hostingView.onMouseExited = { [weak self] in self?.hideHoverSummary() }
+
+        // Keep the status-item width in sync with icon content.
+        model.$snapshot.receive(on: RunLoop.main).sink { [weak self] _ in self?.resizeStatusItem() }
+            .store(in: &cancellables)
         prefs.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in
             // menuBarTarget may have flipped, which shows/hides the unified
             // openclaw indicator and changes the bar width — resize to match.
-            // showRemaining may also have flipped — refresh the tooltip's wording.
-            DispatchQueue.main.async {
-                self?.resizeStatusItem()
-                self?.updateTooltip()
-            }
+            DispatchQueue.main.async { self?.resizeStatusItem() }
         }.store(in: &cancellables)
 
         resizeStatusItem()
-        updateTooltip()
         model.start()
 
         // No-op internally if openclaw isn't installed.
@@ -85,30 +115,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.length = w
     }
 
-    /// Two-line native hover tooltip summarizing both windows, e.g.
-    /// "5시간 사용량 19% · 3시간 8분 후 초기화\n7일 사용량 19% · 일요일 21:59 초기화".
-    /// Mirrors the popover: respects the consumed/remaining display mode and
-    /// reuses the same reset-time strings so the wording never disagrees.
-    private func updateTooltip() {
-        let snap = model.snapshot
-        let mode = prefs.showRemaining ? "남은 양" : "사용량"
-        let five = Meter(usedPercent: snap.fiveHourPercent, showRemaining: prefs.showRemaining)
-        let weekly = Meter(usedPercent: snap.weeklyAllPercent, showRemaining: prefs.showRemaining)
+    /// Show the instant hover summary below the icon. Suppressed while the full
+    /// click popover is open so the two never stack.
+    private func showHoverSummary() {
+        guard let button = statusItem.button, !popover.isShown, !hoverPopover.isShown else { return }
+        hoverPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    }
 
-        func line(_ window: String, _ meter: Meter, _ reset: String) -> String {
-            let head = "\(window) \(mode) \(meter.displayPercent)%"
-            return reset.isEmpty ? head : "\(head) · \(reset)"
-        }
-
-        let text = [
-            line("5시간", five, snap.fiveHourResetText),
-            line("7일", weekly, snap.weeklyResetText)
-        ].joined(separator: "\n")
-
-        // Set on both the button and the overlapping icon view so the tooltip
-        // shows wherever the cursor lands within the status item.
-        statusItem.button?.toolTip = text
-        hostingView.toolTip = text
+    private func hideHoverSummary() {
+        hoverPopover.performClose(nil)
     }
 
     @objc private func togglePopover() {
@@ -116,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            hideHoverSummary() // don't stack the hover summary under the full popover
             // Freshen openclaw before showing its section in the unified popover.
             if prefs.menuBarTarget == .claudeAndOpenClaw, OpenClawService.isInstalled {
                 openClaw.refreshNow()
