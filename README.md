@@ -82,16 +82,18 @@ Sources/mongshell-menubar/
   App/AppDelegate.swift     NSStatusItem + NSPopover + 설정창 관리
   App/SnapshotRenderer.swift 오프스크린 PNG QA 렌더러(MONGSHELL_SNAPSHOT)
   Views/ClaudeMarkView.swift Claude 스타버스트 마크 Canvas 렌더러
-  Views/MenuBarIconView.swift 상태바 마크+5h/7d % (다크/라이트 적응, 맥동)
-  Views/PopoverView.swift   라이트 팝오버 308px
+  Views/MenuBarIconView.swift 상태바 마크 + 5h/7d 링 게이지(+5h 초기화 시각),
+                            openclaw 신호등, 다크/라이트 적응, ≥90% 맥동
+  Views/HoverSummaryView.swift hover 즉시 요약(5h/7d · 초기화 3열 Grid)
+  Views/PopoverView.swift   라이트 팝오버 308px(5시간/주간/모델별 + openclaw 섹션)
   Views/SettingsView.swift  색상·폴링·알림·Claude Code·openclaw·계정
   Views/ClaudeSettingsSection.swift  settings.json 편집 섹션(한글 설명 캡션)
-  Views/OpenClawStatusView.swift  두 번째 상태바 아이콘(색 점)
-  Views/OpenClawPopoverView.swift openclaw 드롭다운(상태/PID/액션)
+  Design/Palette.swift      색 토큰 SSOT(사용량 3단계·팝오버 표면/텍스트)
   Models/…                  Preferences, UsageState, UsageModel(폴링/알림),
                             OpenClawHealth, OpenClawModel(Process 폴링/자동복구),
                             ClaudeSettingsModel(settings.json ↔ 구조체)
   Services/…                Config, Credentials(Keychain), UsageAPIClient, AuthService(PKCE),
+                            LoopbackServer(OAuth 루프백 리다이렉트 수신),
                             TimeText, OpenClawService(openclaw 셸아웃/프로브 파서),
                             ClaudeSettingsStore(settings.json 입출력/파일 감시)
 ```
@@ -101,8 +103,9 @@ Sources/mongshell-menubar/
   (Keychain `Claude Code-credentials` 또는 `~/.claude/.credentials.json`) 자동 감지.
   - Claude Code 사용자는 **로그인 없이** 앱이 기존 토큰을 재사용합니다. 다른 앱이 그 항목을
     읽으므로 **첫 실행 시 "키체인 접근 허용" 프롬프트**가 뜹니다 → "항상 허용".
-  - Claude Code가 없으면 **OAuth 로그인**: 브라우저가 열리고 로그인·승인 후 표시되는 인증
-    코드를 앱에 붙여넣습니다(콘솔 콜백 방식).
+  - Claude Code가 없으면 **OAuth 로그인**: 브라우저가 열리고 로그인·승인하면 로컬 루프백
+    리스너로 **자동 복귀**합니다. 루프백 리다이렉트가 거부되면 콘솔 콜백 페이지에 표시되는
+    인증 코드를 앱에 붙여넣는 방식으로 폴백합니다.
 - **엔드포인트**: `GET https://api.anthropic.com/api/oauth/usage`.
   - 헤더: `Authorization: Bearer …`, `anthropic-beta: oauth-2025-04-20`,
     **`User-Agent: claude-code/<version>` (필수 — 없으면 429 도배)**.
