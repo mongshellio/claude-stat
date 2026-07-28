@@ -24,6 +24,30 @@
 상태(🟡)까지 잡아냅니다. **openclaw가 없거나 `Claude만`을 고르면 이 요소는 메뉴바·팝오버
 어디에도 나타나지 않고 기존과 100% 동일하게 동작합니다.**
 
+## Claude Code 설정 (선택 기능 — `~/.claude` 가 있을 때만 활성화)
+설정창의 **Claude Code** 섹션에서 `~/.claude/settings.json` 을 직접 편집합니다 — 기본 모델,
+추론 강도, 대체 모델, 컨텍스트 자동 압축, 권한 기본 모드. 각 항목에 무엇을 바꾸는 값인지
+한글 설명이 붙어 있고, 추론 강도·권한 모드 선택지에는 문서·CLI 와 대조할 수 있게 실제
+값(`xhigh`, `auto` …)을 함께 표기합니다.
+
+권한 기본 모드는 `ask`/`auto`/`deny` 만 제공합니다 — `allow`(전부 허용)는 오클릭 위험 때문에
+GUI 에서 뺐습니다. 파일에 이미 `allow` 나 앱이 모르는 값(고정 모델 ID 등)이 들어 있으면
+"직접 설정한 값"으로 그대로 보여주고 유지하므로, 설정창을 열었다는 이유로 값이 바뀌지는
+않습니다.
+
+Claude Code 는 설정 파일을 감시하므로 **대부분 실행 중인 세션에도 즉시 반영**되고, `model`
+만 새 세션부터 적용됩니다. 반대로 CLI 쪽 변경(`/effort`, `/fast`)도 파일 감시로 설정창에
+바로 반영됩니다.
+
+저장은 **read-modify-write** 입니다 — 저장 직전 파일을 다시 읽어 위 5개 키만 교체하므로
+권한 목록·플러그인 설정 등 앱이 모르는 키는 값이 그대로 보존됩니다(다만 파일 전체가 키
+정렬된 형태로 다시 쓰이므로 손으로 잡아둔 키 순서·들여쓰기는 유지되지 않습니다). 직전
+내용은 가능한 경우 `settings.json.bak` 로 한 부 남습니다. 기본값으로 되돌리면 값을 쓰는
+대신 **키를 삭제**합니다. `hooks`·`env`·MCP 같은 자유형 키는 의도적으로 다루지 않습니다.
+
+> 개발 중에는 `MONGSHELL_CLAUDE_SETTINGS=<경로>` 로 실제 설정 파일 대신 사본을 쓰게 할 수
+> 있습니다.
+
 ## 설치 — 각자 빌드해서 쓰기 (Apple 계정 불필요)
 직접 빌드한 앱은 Gatekeeper에 막히지 않습니다. 필요한 건 **macOS 14+ 와 Xcode
 (또는 Command Line Tools)** 뿐.
@@ -42,8 +66,14 @@ open mongshell-menubar.app                 # 메뉴바에 아이콘 등장
 ### 개발용
 ```bash
 ./scripts/make_app.sh debug && open mongshell-menubar.app          # 디버그 빌드
-swift build && MONGSHELL_SNAPSHOT=/tmp/mongshell_snaps ./.build/debug/mongshell-menubar   # 아이콘/팝오버 PNG 렌더
+./scripts/test.sh                                                  # settings.json 읽기/쓰기 회귀 테스트
+swift build && MONGSHELL_SNAPSHOT=/tmp/mongshell_snaps ./.build/debug/mongshell-menubar   # 아이콘/팝오버·설정창 PNG 렌더
 ```
+
+테스트는 `swift test` 가 아니라 `scripts/test.sh` 입니다 — `swift test` 는 XCTest 나
+swift-testing 을 요구하는데 둘 다 Command Line Tools 에 들어 있지 않아서, Xcode 없이 빌드
+가능하다는 이 프로젝트의 전제와 맞지 않습니다. 대신 실제 소스 파일을 그대로 컴파일해
+검증합니다. 다루는 불변식은 하나입니다 — **보이지 않는 설정을 앱이 파괴하지 않는다.**
 
 ## 구조
 ```
@@ -54,13 +84,16 @@ Sources/mongshell-menubar/
   Views/ClaudeMarkView.swift Claude 스타버스트 마크 Canvas 렌더러
   Views/MenuBarIconView.swift 상태바 마크+5h/7d % (다크/라이트 적응, 맥동)
   Views/PopoverView.swift   라이트 팝오버 308px
-  Views/SettingsView.swift  색상·폴링·알림·계정·openclaw
+  Views/SettingsView.swift  색상·폴링·알림·Claude Code·openclaw·계정
+  Views/ClaudeSettingsSection.swift  settings.json 편집 섹션(한글 설명 캡션)
   Views/OpenClawStatusView.swift  두 번째 상태바 아이콘(색 점)
   Views/OpenClawPopoverView.swift openclaw 드롭다운(상태/PID/액션)
   Models/…                  Preferences, UsageState, UsageModel(폴링/알림),
-                            OpenClawHealth, OpenClawModel(Process 폴링/자동복구)
+                            OpenClawHealth, OpenClawModel(Process 폴링/자동복구),
+                            ClaudeSettingsModel(settings.json ↔ 구조체)
   Services/…                Config, Credentials(Keychain), UsageAPIClient, AuthService(PKCE),
-                            TimeText, OpenClawService(openclaw 셸아웃/프로브 파서)
+                            TimeText, OpenClawService(openclaw 셸아웃/프로브 파서),
+                            ClaudeSettingsStore(settings.json 입출력/파일 감시)
 ```
 
 ## 데이터 소스 & 인증
