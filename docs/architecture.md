@@ -1,0 +1,115 @@
+---
+role: "Tech Stack·데이터 흐름·인증·배포 인프라 사양의 단일 권위 — 각 선택을 왜 그렇게 했는지(대안·결과)는 다루지 않음."
+kind: reference
+non_goals:
+  - "각 선택의 근거·대안·결과 (docs/architecture-decisions.md)"
+  - "프로덕트 범위 판단 (docs/PHILOSOPHY.md)"
+  - "빌드/테스트 명령 (docs/development.md)"
+---
+
+# Architecture
+
+## Tech Stack
+
+| 층 | 사용 기술 |
+|---|---|
+| 언어 / 빌드 | Swift 6, SwiftPM (`swift-tools-version: 6.0`), 단일 executable 타깃 |
+| 최소 플랫폼 | macOS 14 |
+| UI | SwiftUI 뷰 + AppKit 호스팅 (`NSStatusItem`, `NSPopover`, `NSWindow`) |
+| 동시성 | Swift Concurrency (`@MainActor` 격리, `Task`, `async/await`) |
+| 네트워크 | `URLSession` (Foundation) |
+| 로컬 리스너 | `Network.framework` (`NWListener`) — OAuth 루프백 |
+| 자격증명 | Security.framework Keychain (generic password) |
+| 설정 영속화 | `UserDefaults` (`@AppStorage`) |
+| 알림 | UserNotifications (앱 번들 필수) |
+| 외부 프로세스 | Foundation `Process` — `openclaw` CLI, `launchctl` |
+| 외부 패키지 의존성 | **없음** |
+
+DB·서버·백엔드가 없다. 이 앱은 단일 프로세스 클라이언트다.
+
+## Data Flow
+
+### 1. 사용량 폴링 (주 경로)
+
+```
+UsageModel.pollLoop()  ──(@MainActor, Task)
+   └─ CredentialStore.token()      ← Keychain (자체 토큰 → Claude Code 토큰 순)
+   └─ UsageAPIClient.fetch(token:)
+        └─ GET https://api.anthropic.com/api/oauth/usage
+             Authorization: Bearer …
+             User-Agent: claude-code/<version>      ← 필수
+             anthropic-beta: oauth-2025-04-20
+        └─ parse() → UsageSnapshot
+   └─ @Published snapshot 갱신
+        ├─ MenuBarIconView   (상태바 링 게이지 + 초기화 시각)
+        ├─ HoverSummaryView  (hover 즉시 팝오버)
+        ├─ PopoverView       (클릭 팝오버)
+        └─ 임계 알림 (UserNotifications)
+```
+
+- 폴링 주기는 사용자 설정값과 `Config.minPollInterval` 중 큰 값. 기본이자 하한이 180초다.
+- `429` 응답 시 지수 백오프 (`base * 2^n`, 상한 3600초).
+- 응답 스키마가 비공개라 `parse()` 는 후보 키 경로를 여러 개 탐색하고 채울 수 있는 것만 채운다.
+- 토큰이 없으면 네트워크를 타지 않고 `UsageSnapshot.sample` 로 렌더한다.
+
+### 2. Claude Code 설정 편집 (양방향)
+
+```
+~/.claude/settings.json  ←→  ClaudeSettingsStore  ←→  ClaudeSettingsModel  ←→  ClaudeSettingsSection
+        │                          │
+        │                          └─ DispatchSource 파일 감시 (150ms 디바운스)
+        └─ 저장: 디스크 재읽기 → 해당 키 하나만 반영(applyChange) → 원자적 쓰기
+```
+
+- 저장은 **read-modify-write** 다. 인메모리 스냅샷을 통째로 쓰지 않는다 — 앱이 모르는 키(권한 규칙·플러그인·hooks)를 보존하고, 감시가 놓친 외부 변경을 덮지 않기 위해서.
+- 읽기에 실패하면 쓰지 않는다. 쓰기 직전 `lstat` 으로 대상이 심링크인지 확인하고 거부한다 (dotfile 관리 도구와의 충돌 방지).
+- 직전 내용은 가능한 경우 `settings.json.bak` (권한 0600) 으로 한 부 남긴다.
+- `MONGSHELL_CLAUDE_SETTINGS` 로 대상 경로를 바꿀 수 있다 (개발·테스트용).
+
+### 3. openclaw 상태 (선택 경로)
+
+```
+OpenClawModel  ──(주기 폴링, 백그라운드)
+   └─ OpenClawService → Process: `openclaw channels status --probe`
+        └─ 파싱 → OpenClawHealth (🟢 정상 / 🟡 채널 워커 사망 / 🔴 게이트웨이 사망)
+   └─ 자동복구: 2회 연속 실패 + 쿨다운 600초 → launchctl 하드 재시작
+```
+
+`openclaw` 가 설치돼 있지 않거나 사용자가 `Claude만` 을 고르면 이 경로 전체가 비활성이며 UI 에 아무 흔적도 남지 않는다.
+
+## Auth
+
+**단일 사용자·단일 계정 전제.** 서버 세션이나 멀티유저 개념이 없다.
+
+읽기 우선순위:
+
+1. **자체 OAuth 토큰** — Keychain (`Config.ownKeychainService`)
+2. **Claude Code CLI 토큰** — Keychain `Claude Code-credentials`, 없으면 `~/.claude/.credentials.json`
+
+Claude Code 사용자는 로그인 없이 기존 토큰을 재사용한다. 다른 앱의 Keychain 항목을 읽으므로 **첫 실행 시 "키체인 접근 허용" 프롬프트**가 뜬다.
+
+토큰이 없을 때의 로그인 흐름은 **OAuth 2.0 Authorization Code + PKCE** 이며, Claude Code 의 client_id 를 재사용한다 (ToS 회색지대 — Decision 2).
+
+- **1순위: 루프백** (`LoopbackServer`, RFC 8252) — 임의 free 포트를 열고 브라우저가 `/callback?code=…&state=…` 로 돌아오면 자동 완료.
+- **폴백: 수동 붙여넣기** — 루프백 리다이렉트가 거부되면 콘솔 콜백 페이지에 표시된 `code#state` 를 앱에 붙여넣는다.
+
+**인증 경계**: 토큰은 Keychain 에만 저장되고 `api.anthropic.com` / `platform.claude.com` 외 어디에도 전송되지 않는다. 텔레메트리·크래시 리포터가 없다.
+
+## Infrastructure
+
+서버 인프라가 없다. 배포는 로컬 빌드 산출물이다.
+
+| 경로 | 도구 | 서명 | 용도 |
+|---|---|---|---|
+| 로컬 사용 | `scripts/make_app.sh` | ad-hoc | 각자 빌드해서 쓰기 (Apple 계정 불필요) |
+| 지인 공유 | `scripts/release.sh` | Developer ID + 공증 | `.dmg` 배포 (Gatekeeper 통과, 업데이트 후 토큰 유지) |
+
+- **App Sandbox 미사용** — Keychain 의 타 앱 항목 접근과 `openclaw`/`launchctl` 셸아웃이 샌드박스와 양립하지 않는다.
+- 버전 SSOT 는 git tag (`v1.0.0`, `v1.0.1` …) 이며 GitHub Releases 가 배포 채널이다.
+- 외부 SaaS 의존은 Anthropic 호스트 하나뿐이다.
+
+## 알려진 제약
+
+- 사용량 엔드포인트는 **비공개**다. 스키마·헤더가 예고 없이 바뀌거나 차단될 수 있다.
+- `User-Agent: claude-code/<version>` 이 없으면 공격적인 rate limit 버킷으로 떨어져 지속적인 429 를 받는다.
+- `swift run` 으로 맨 바이너리를 실행하면 UserNotifications 가 앱 번들을 요구해 크래시한다.
