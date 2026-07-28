@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = UsageModel.shared
     private let prefs = Preferences.shared
     private let openClaw = OpenClawModel.shared
+    private let claude = ClaudeSettingsModel.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // QA hook: render reference PNGs offscreen, then exit.
@@ -107,6 +108,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // No-op internally if openclaw isn't installed.
         openClaw.start()
+
+        // Loads ~/.claude/settings.json and watches it, so the settings window
+        // is already truthful when opened and tracks CLI-side edits live.
+        // No-op if Claude Code isn't installed.
+        claude.start()
     }
 
     private func resizeStatusItem() {
@@ -148,9 +154,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = SettingsView(model: model, prefs: prefs, openClaw: openClaw)
+        let view = SettingsView(model: model, prefs: prefs, openClaw: openClaw, claude: claude)
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 700),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )

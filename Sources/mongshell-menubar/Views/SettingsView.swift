@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var model: UsageModel
     @ObservedObject var prefs: Preferences
     @ObservedObject var openClaw: OpenClawModel
+    @ObservedObject var claude: ClaudeSettingsModel
 
     private let intervals = [180, 300, 600, 900]
     private let openClawIntervals = [30, 60, 120]
@@ -46,6 +47,10 @@ struct SettingsView: View {
                 Toggle("25/50/75/90% 도달 알림", isOn: $prefs.notifyThresholds)
             }
 
+            Section("Claude Code") {
+                ClaudeSettingsSection(claude: claude)
+            }
+
             Section("openclaw") {
                 openClawSection
             }
@@ -55,7 +60,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380, height: 560)
+        .frame(width: 380, height: 700)
     }
 
     /// openclaw controls. When openclaw isn't installed, the picker is locked
