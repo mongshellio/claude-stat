@@ -52,7 +52,7 @@ enum SnapshotRenderer {
         defer { win.close() }
 
         guard let content = win.contentView else {
-            FileHandle.standardError.write(Data("snapshot \(name): no content view\n".utf8))
+            report("\(name): no content view")
             return
         }
         content.layoutSubtreeIfNeeded()
@@ -61,19 +61,19 @@ enum SnapshotRenderer {
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))
 
         guard let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds) else {
-            FileHandle.standardError.write(Data("snapshot \(name): capture failed\n".utf8))
+            report("\(name): capture failed")
             return
         }
         content.cacheDisplay(in: content.bounds, to: rep)
         guard let png = rep.representation(using: .png, properties: [:]) else {
-            FileHandle.standardError.write(Data("snapshot \(name): PNG encode failed\n".utf8))
+            report("\(name): PNG encode failed")
             return
         }
         do {
             try png.write(to: dir.appendingPathComponent("\(name).png"))
         } catch {
             // A silently missing reference image reads as "nothing changed".
-            FileHandle.standardError.write(Data("snapshot \(name): \(error)\n".utf8))
+            report("\(name): \(error)")
         }
     }
 
@@ -83,8 +83,21 @@ enum SnapshotRenderer {
         guard let nsImage = renderer.nsImage,
               let tiff = nsImage.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:]) else { return }
-        try? png.write(to: dir.appendingPathComponent("\(name).png"))
+              let png = rep.representation(using: .png, properties: [:]) else {
+            report("\(name): render failed")
+            return
+        }
+        do {
+            try png.write(to: dir.appendingPathComponent("\(name).png"))
+        } catch {
+            report("\(name): \(error)")
+        }
+    }
+
+    /// A silently missing reference image reads as "nothing changed", so every
+    /// failure path says so on stderr.
+    private static func report(_ message: String) {
+        FileHandle.standardError.write(Data("snapshot \(message)\n".utf8))
     }
 }
 

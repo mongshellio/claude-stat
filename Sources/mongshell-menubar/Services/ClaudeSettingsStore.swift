@@ -20,12 +20,26 @@ enum ClaudeSettingsStore {
     static var fileURL: URL {
         if let override = ProcessInfo.processInfo.environment["MONGSHELL_CLAUDE_SETTINGS"],
            !override.isEmpty {
-            return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
-                .resolvingSymlinksInPath()
+            return resolving(URL(fileURLWithPath: (override as NSString).expandingTildeInPath))
         }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/settings.json")
-            .resolvingSymlinksInPath()
+        return resolving(FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude/settings.json"))
+    }
+
+    /// `resolvingSymlinksInPath()` gives up the moment a link's target doesn't
+    /// exist, so the remaining hops are followed by hand. Without this, a
+    /// dangling link — a dotfile repo mid-restow, a renamed target — reads as
+    /// "no file yet" and the atomic write replaces the link with a plain file,
+    /// silently detaching the user's real settings.
+    private static func resolving(_ url: URL) -> URL {
+        var current = url.resolvingSymlinksInPath()
+        for _ in 0..<8 {
+            guard let target = try? FileManager.default
+                .destinationOfSymbolicLink(atPath: current.path) else { break }
+            current = URL(fileURLWithPath: target,
+                          relativeTo: current.deletingLastPathComponent()).standardizedFileURL
+        }
+        return current
     }
 
     /// Claude Code is "installed" iff its config directory exists. We key off the
@@ -42,15 +56,21 @@ enum ClaudeSettingsStore {
         case notInstalled
         case unreadable
         case malformed
+        case tooLarge
 
         var errorDescription: String? {
             switch self {
             case .notInstalled: return "Claude Code 설정 폴더(~/.claude)를 찾을 수 없습니다."
             case .unreadable:   return "settings.json 을 열 수 없습니다 (권한 또는 디스크 오류)."
             case .malformed:    return "settings.json 을 읽을 수 없습니다 (JSON 형식 오류)."
+            case .tooLarge:     return "settings.json 이 너무 큽니다 (5MB 초과)."
             }
         }
     }
+
+    /// Parsing happens on the main actor, so an implausibly large file would
+    /// freeze the UI rather than merely being slow.
+    private static let maxBytes = 5 * 1024 * 1024
 
     // MARK: Read
 
@@ -62,17 +82,25 @@ enum ClaudeSettingsStore {
     /// file we simply failed to read would turn the next save into a wipe of
     /// every setting we can't see.
     static func load() throws -> [String: Any] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [:] }
+        try load(from: fileURL)
+    }
+
+    /// Takes the URL as a parameter so a caller that reads and then writes can
+    /// resolve the path exactly once — `fileURL` walks symlinks on every access,
+    /// and two lookups can disagree.
+    static func load(from url: URL) throws -> [String: Any] {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
 
         let data: Data
         do {
-            data = try Data(contentsOf: fileURL)
+            data = try Data(contentsOf: url)
         } catch {
             throw StoreError.unreadable
         }
         // A file that exists but holds nothing is the debris of an interrupted
         // write, not a fresh install.
         guard !data.isEmpty else { throw StoreError.malformed }
+        guard data.count <= maxBytes else { throw StoreError.tooLarge }
 
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any] else {
@@ -93,15 +121,23 @@ enum ClaudeSettingsStore {
     static func mutate(_ transform: (inout [String: Any]) -> Void) throws -> [String: Any] {
         guard isInstalled else { throw StoreError.notInstalled }
 
-        var dict = try load()
+        // Resolved once and reused: every `fileURL` access re-walks symlinks, so
+        // separate lookups for read, backup and write could land on different
+        // files.
+        let url = fileURL
+        var dict = try load(from: url)
         transform(&dict)
 
         // Keep one copy of the previous contents. Best-effort: a missing file or
         // an unwritable backup must not block the save itself.
-        let backup = fileURL.appendingPathExtension("bak")
-        if FileManager.default.fileExists(atPath: fileURL.path) {
+        let backup = url.appendingPathExtension("bak")
+        if FileManager.default.fileExists(atPath: url.path) {
             try? FileManager.default.removeItem(at: backup)
-            try? FileManager.default.copyItem(at: fileURL, to: backup)
+            try? FileManager.default.copyItem(at: url, to: backup)
+            // copyItem carries the source mode over, but this file can hold API
+            // keys via `env`/`apiKeyHelper` — state the mode rather than inherit it.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600],
+                                                   ofItemAtPath: backup.path)
         }
 
         // `.sortedKeys` costs us the author's key order once, but makes our
@@ -113,7 +149,7 @@ enum ClaudeSettingsStore {
         )
         // `.atomic` writes a temp file and renames — a crash mid-write can never
         // leave a truncated settings.json behind.
-        try data.write(to: fileURL, options: .atomic)
+        try data.write(to: url, options: .atomic)
         return dict
     }
 
@@ -212,8 +248,17 @@ final class ClaudeSettingsWatcher: @unchecked Sendable {
 
     /// Installs `new` and cancels whatever it replaced. Cancelling outside the
     /// lock keeps the cancel handler (which closes the fd) off a held lock.
+    ///
+    /// `stopped` is re-checked here because `arm()` releases the lock before
+    /// opening the file: a `stop()` landing in that window would otherwise be
+    /// undone by the source `arm()` is about to install.
     private func swap(_ new: DispatchSourceFileSystemObject?) {
         lock.lock()
+        if stopped && new != nil {
+            lock.unlock()
+            new?.cancel()
+            return
+        }
         let old = source
         source = new
         lock.unlock()
@@ -248,9 +293,12 @@ final class ClaudeSettingsWatcher: @unchecked Sendable {
 
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else {
-            // No file yet (fresh install). Retry rather than giving up, so the
-            // first CLI write still reaches us.
-            scheduleArm(after: 5, notifying: false)
+            // No file yet (fresh install), or a writer is mid-rename. Retry
+            // rather than giving up, and notify on the way back: a write that
+            // completed while we had no descriptor open produces no event of
+            // its own, and a stale in-memory copy is what lets an unrelated
+            // edit overwrite someone else's change.
+            scheduleArm(after: 5, notifying: true)
             return
         }
 
@@ -272,7 +320,11 @@ final class ClaudeSettingsWatcher: @unchecked Sendable {
             }
         }
         src.setCancelHandler { close(fd) }
-        swap(src)
+        // Resume before installing: a suspended source defers its cancel
+        // handler, so `swap` rejecting this one (stop() raced us) would leak the
+        // descriptor. Events arriving before the swap are harmless — the handler
+        // doesn't read `source`.
         src.resume()
+        swap(src)
     }
 }

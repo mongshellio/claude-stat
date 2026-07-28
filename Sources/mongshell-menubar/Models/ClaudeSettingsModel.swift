@@ -33,6 +33,7 @@ final class ClaudeSettingsModel: ObservableObject {
     @Published private(set) var lastError: String?
 
     private var watcher: ClaudeSettingsWatcher?
+    private var reloadTask: Task<Void, Never>?
 
     private init() {}
 
@@ -44,6 +45,7 @@ final class ClaudeSettingsModel: ObservableObject {
         // Tear down any previous watch first, mirroring `OpenClawModel.start()`.
         watcher?.stop()
         watcher = nil
+        reloadTask?.cancel()
 
         isInstalled = ClaudeSettingsStore.isInstalled
         guard isInstalled else { return }
@@ -51,10 +53,22 @@ final class ClaudeSettingsModel: ObservableObject {
         reload()
 
         let w = ClaudeSettingsWatcher(url: ClaudeSettingsStore.fileURL) { [weak self] in
-            Task { @MainActor in self?.reload() }
+            Task { @MainActor in self?.scheduleReload() }
         }
         w.start()
         watcher = w
+    }
+
+    /// Coalesces watcher events. Reading parses the file on the main actor, and
+    /// a writer that touches the file several times in a row (or our own save,
+    /// which the watcher also sees) would otherwise mean one parse per event.
+    private func scheduleReload() {
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            self?.reload()
+        }
     }
 
     /// Re-reads the file into `settings`. Never writes — this is the path the
@@ -76,23 +90,30 @@ final class ClaudeSettingsModel: ObservableObject {
     func binding<V>(_ keyPath: WritableKeyPath<ClaudeSettings, V>) -> Binding<V> {
         Binding(
             get: { self.settings[keyPath: keyPath] },
-            set: { newValue in
-                var next = self.settings
-                next[keyPath: keyPath] = newValue
-                self.save(next)
-            }
+            set: { newValue in self.save(keyPath, newValue) }
         )
     }
 
     // MARK: Persistence
 
-    private func save(_ next: ClaudeSettings) {
+    /// Writes exactly one setting — the one the user just changed.
+    ///
+    /// The value written for every *other* key is re-derived from the file
+    /// inside the write, never from `settings`. That matters because our
+    /// in-memory copy can be stale: the file watcher can miss a window, and
+    /// `permissions.defaultMode` is a tool-approval gate. Saving the whole
+    /// snapshot would let flipping an unrelated toggle here quietly revert a
+    /// change made in the CLI a moment ago.
+    private func save<V>(_ keyPath: WritableKeyPath<ClaudeSettings, V>, _ newValue: V) {
         // Optimistic: reflect the click immediately, then reconcile with what
         // actually landed on disk.
-        settings = next
+        var optimistic = settings
+        optimistic[keyPath: keyPath] = newValue
+        settings = optimistic
+
         do {
             let written = try ClaudeSettingsStore.mutate { dict in
-                Self.apply(next, to: &dict)
+                Self.applyChange(keyPath, newValue, to: &dict)
             }
             settings = Self.parse(written)
             lastError = nil
@@ -103,6 +124,20 @@ final class ClaudeSettingsModel: ObservableObject {
     }
 
     // MARK: JSON ↔ struct
+
+    /// The write half of a save, kept out of `save` so the tests exercise the
+    /// shipping path rather than a re-creation of it.
+    ///
+    /// Note what it is handed and what it isn't: everything except `keyPath`
+    /// comes from `dict` — the file as it exists right now — so a save can only
+    /// ever change the one setting the user touched.
+    nonisolated static func applyChange<V>(_ keyPath: WritableKeyPath<ClaudeSettings, V>,
+                                           _ newValue: V,
+                                           to dict: inout [String: Any]) {
+        var fresh = parse(dict)
+        fresh[keyPath: keyPath] = newValue
+        apply(fresh, to: &dict)
+    }
 
     /// Pure, and deliberately `nonisolated` + internal: the JSON mapping is the
     /// part worth exercising directly, and it has no business needing the main
@@ -133,7 +168,12 @@ final class ClaudeSettingsModel: ObservableObject {
 
         // Order carries meaning (1차 then 2차), so a blank 1차 promotes 2차
         // rather than leaving a hole. Duplicates would be dead entries.
-        var chain = [s.fallbackPrimary, s.fallbackSecondary].filter { !$0.isEmpty }
+        //
+        // The UI only shows two slots but the key accepts three, and anything
+        // past the second is kept: overwriting the array with just what we
+        // display would delete an entry the user can't even see here.
+        let tail = Array((dict["fallbackModel"] as? [String] ?? []).dropFirst(2))
+        var chain = [s.fallbackPrimary, s.fallbackSecondary].filter { !$0.isEmpty } + tail
         chain = chain.reduce(into: [String]()) { acc, m in if !acc.contains(m) { acc.append(m) } }
         ClaudeSettingsStore.set(&dict, "fallbackModel",
                                 chain.isEmpty ? nil : chain) { $0 is [String] }
@@ -194,8 +234,29 @@ enum ClaudeChoices {
                         emptyLabel: String) -> [ClaudeChoice] {
         var all = [ClaudeChoice(value: "", label: emptyLabel)] + known
         if !current.isEmpty && !known.contains(where: { $0.value == current }) {
-            all.append(ClaudeChoice(value: current, label: "\(current) (직접 설정한 값)"))
+            all.append(ClaudeChoice(value: current,
+                                    label: "\(displayable(current)) (직접 설정한 값)"))
         }
         return all
     }
+
+    /// The value is arbitrary file content, and it's about to name a row in a
+    /// picker. Bidi overrides could make a row read as a different setting than
+    /// the one it selects, and an unbounded string blows out the layout — so
+    /// strip formatting controls and cap the length. Only the *label* is
+    /// touched; the value written back stays byte-for-byte.
+    private static func displayable(_ value: String) -> String {
+        let stripped = String(String.UnicodeScalarView(
+            value.unicodeScalars.filter { !unsafeForDisplay.contains($0) }
+        ))
+        return stripped.count > 64 ? stripped.prefix(64) + "…" : stripped
+    }
+
+    private static let unsafeForDisplay: CharacterSet = {
+        var set = CharacterSet.controlCharacters
+        set.formUnion(CharacterSet(charactersIn: "\u{200E}"..."\u{200F}")) // LRM/RLM
+        set.formUnion(CharacterSet(charactersIn: "\u{202A}"..."\u{202E}")) // bidi embedding
+        set.formUnion(CharacterSet(charactersIn: "\u{2066}"..."\u{2069}")) // bidi isolates
+        return set
+    }()
 }
