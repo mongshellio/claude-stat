@@ -96,7 +96,7 @@ final class ClaudeSettingsModel: ObservableObject {
 
     // MARK: Persistence
 
-    /// Writes exactly one setting — the one the user just changed.
+    /// Applies the one setting the user just changed.
     ///
     /// The value written for every *other* key is re-derived from the file
     /// inside the write, never from `settings`. That matters because our
@@ -104,13 +104,11 @@ final class ClaudeSettingsModel: ObservableObject {
     /// `permissions.defaultMode` is a tool-approval gate. Saving the whole
     /// snapshot would let flipping an unrelated toggle here quietly revert a
     /// change made in the CLI a moment ago.
+    ///
+    /// The write is synchronous, so `settings` is published once, from what
+    /// actually landed on disk. On failure it isn't published at all and the
+    /// control snaps back to the file's value.
     private func save<V>(_ keyPath: WritableKeyPath<ClaudeSettings, V>, _ newValue: V) {
-        // Optimistic: reflect the click immediately, then reconcile with what
-        // actually landed on disk.
-        var optimistic = settings
-        optimistic[keyPath: keyPath] = newValue
-        settings = optimistic
-
         do {
             let written = try ClaudeSettingsStore.mutate { dict in
                 Self.applyChange(keyPath, newValue, to: &dict)
@@ -129,8 +127,12 @@ final class ClaudeSettingsModel: ObservableObject {
     /// shipping path rather than a re-creation of it.
     ///
     /// Note what it is handed and what it isn't: everything except `keyPath`
-    /// comes from `dict` — the file as it exists right now — so a save can only
-    /// ever change the one setting the user touched.
+    /// comes from `dict` — the file as it exists right now — so no other
+    /// setting can change *meaning* here. Their spelling can still change,
+    /// because the round trip normalises: a `fallbackModel` with duplicates
+    /// comes back deduplicated, and a key spelling out Claude Code's own
+    /// default (`"autoCompactEnabled": true`) comes back absent. Both are
+    /// behaviour-preserving; neither is a value the user loses.
     nonisolated static func applyChange<V>(_ keyPath: WritableKeyPath<ClaudeSettings, V>,
                                            _ newValue: V,
                                            to dict: inout [String: Any]) {

@@ -42,6 +42,14 @@ enum ClaudeSettingsStore {
         return current
     }
 
+    /// `attributesOfItem` doesn't follow links, so this reports on the entry
+    /// itself rather than its target.
+    private static func isSymlink(_ url: URL) -> Bool {
+        let type = try? FileManager.default.attributesOfItem(atPath: url.path)[.type]
+            as? FileAttributeType
+        return type == .typeSymbolicLink
+    }
+
     /// Claude Code is "installed" iff its config directory exists. We key off the
     /// directory, not the file: a fresh install has `~/.claude` but may not have
     /// written `settings.json` yet, and we're happy to create it.
@@ -125,6 +133,12 @@ enum ClaudeSettingsStore {
         // separate lookups for read, backup and write could land on different
         // files.
         let url = fileURL
+
+        // A symlink cycle exhausts the hop limit in `resolving(_:)` and hands
+        // back a link. Writing through it is exactly the failure that function
+        // exists to prevent, so refuse rather than replace the link.
+        if isSymlink(url) { throw StoreError.unreadable }
+
         var dict = try load(from: url)
         transform(&dict)
 
@@ -252,11 +266,11 @@ final class ClaudeSettingsWatcher: @unchecked Sendable {
     /// `stopped` is re-checked here because `arm()` releases the lock before
     /// opening the file: a `stop()` landing in that window would otherwise be
     /// undone by the source `arm()` is about to install.
-    private func swap(_ new: DispatchSourceFileSystemObject?) {
+    private func install(_ new: DispatchSourceFileSystemObject) {
         lock.lock()
-        if stopped && new != nil {
+        if stopped {
             lock.unlock()
-            new?.cancel()
+            new.cancel()
             return
         }
         let old = source
@@ -265,14 +279,18 @@ final class ClaudeSettingsWatcher: @unchecked Sendable {
         old?.cancel()
     }
 
-    /// Arms after `delay`, replacing any arm already queued. `notifying` fires
-    /// one extra read after re-arming: writes that land while no descriptor is
-    /// open produce no event of their own, so without it the gap is silent.
+    /// Arms after `delay`. `notifying` fires one extra read, but **only if the
+    /// arm succeeded**: a write that landed while no descriptor was open
+    /// produces no event of its own, so the gap would otherwise be silent.
+    ///
+    /// Gating on success matters — while the file simply doesn't exist yet the
+    /// retry runs forever, and notifying on each attempt would republish the
+    /// same settings every 5 seconds and re-render the window with it.
     private func scheduleArm(after delay: TimeInterval, notifying: Bool) {
         let item = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            self.arm()
-            if notifying { self.onChange() }
+            let armed = self.arm()
+            if notifying && armed { self.onChange() }
         }
         lock.lock()
         guard !stopped else {
@@ -285,21 +303,23 @@ final class ClaudeSettingsWatcher: @unchecked Sendable {
         queue.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
-    private func arm() {
+    /// Returns whether a descriptor is now being watched.
+    @discardableResult
+    private func arm() -> Bool {
         lock.lock()
         let isStopped = stopped
         lock.unlock()
-        guard !isStopped else { return }
+        guard !isStopped else { return false }
 
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else {
-            // No file yet (fresh install), or a writer is mid-rename. Retry
-            // rather than giving up, and notify on the way back: a write that
+            // No file yet (fresh install), or a writer is mid-rename. Keep
+            // retrying, and notify once we actually get back in: a write that
             // completed while we had no descriptor open produces no event of
             // its own, and a stale in-memory copy is what lets an unrelated
             // edit overwrite someone else's change.
             scheduleArm(after: 5, notifying: true)
-            return
+            return false
         }
 
         let src = DispatchSource.makeFileSystemObjectSource(
@@ -321,10 +341,11 @@ final class ClaudeSettingsWatcher: @unchecked Sendable {
         }
         src.setCancelHandler { close(fd) }
         // Resume before installing: a suspended source defers its cancel
-        // handler, so `swap` rejecting this one (stop() raced us) would leak the
-        // descriptor. Events arriving before the swap are harmless — the handler
-        // doesn't read `source`.
+        // handler, so `install` rejecting this one (stop() raced us) would leak
+        // the descriptor. Events arriving before the install are harmless — the
+        // handler doesn't read `source`.
         src.resume()
-        swap(src)
+        install(src)
+        return true
     }
 }

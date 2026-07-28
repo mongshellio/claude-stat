@@ -284,6 +284,25 @@ do {
     check("쓰기가 링크 대상에 도달함", FileManager.default.fileExists(atPath: target.path))
 }
 
+// 심링크 사이클은 풀 수 없다 — 링크를 일반 파일로 갈아치우느니 거부해야 한다.
+do {
+    caseIndex += 1
+    let dir = root.appendingPathComponent("case-\(caseIndex)")
+    try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let a = dir.appendingPathComponent("a.json")
+    let b = dir.appendingPathComponent("b.json")
+    try! FileManager.default.createSymbolicLink(atPath: a.path, withDestinationPath: b.path)
+    try! FileManager.default.createSymbolicLink(atPath: b.path, withDestinationPath: a.path)
+    setenv("MONGSHELL_CLAUDE_SETTINGS", a.path, 1)
+
+    checkThrows("심링크 사이클에는 쓰지 않는다") {
+        _ = try ClaudeSettingsStore.mutate { ClaudeSettingsModel.apply(ClaudeSettings(), to: &$0) }
+    }
+    let attrs = try? FileManager.default.attributesOfItem(atPath: a.path)
+    check("사이클 심링크가 일반 파일로 바뀌지 않음",
+          (attrs?[.type] as? FileAttributeType) == .typeSymbolicLink)
+}
+
 // MARK: - 선택지
 
 print("\n선택지")
