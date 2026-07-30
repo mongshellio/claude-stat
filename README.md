@@ -63,12 +63,57 @@ open mongshell-menubar.app                 # 메뉴바에 아이콘 등장
 > `swift run`으로 맨 바이너리를 직접 실행하면 UserNotifications가 앱 번들을 요구해
 > 크래시합니다. 항상 `.app` 번들(`make_app.sh`)로 실행하세요.
 
+> 재빌드할 때마다 키체인 프롬프트가 다시 뜬다면 ad-hoc 서명 때문입니다 —
+> [로컬 코드 서명 인증서](#키체인-프롬프트가-재빌드마다-다시-뜰-때--로컬-코드-서명-인증서) 참고.
+
 ### 개발용
 ```bash
 ./scripts/make_app.sh debug && open mongshell-menubar.app          # 디버그 빌드
 ./scripts/test.sh                                                  # settings.json 읽기/쓰기 회귀 테스트
 swift build && MONGSHELL_SNAPSHOT=/tmp/mongshell_snaps ./.build/debug/mongshell-menubar   # 아이콘/팝오버·설정창 PNG 렌더
 ```
+
+#### 키체인 프롬프트가 재빌드마다 다시 뜰 때 — 로컬 코드 서명 인증서
+`make_app.sh` 는 서명할 인증서가 없으면 ad-hoc 서명(`--sign -`)으로 떨어집니다. 이때
+designated requirement 가 `cdhash H"…"` 로 바이너리 해시에 고정되는데, 키체인의 *항상 허용*
+은 이 requirement 를 기준으로 앱을 식별합니다. 재빌드하면 해시가 바뀌어 macOS 가 다른 앱으로
+보므로 `Claude Code-credentials` 접근 프롬프트가 매번 다시 뜹니다.
+
+자기 서명 인증서로 서명하면 requirement 가
+`identifier "com.mongshell.menubar" and certificate leaf = H"…"` 가 되어 재빌드에도 신원이
+유지되고, *항상 허용* 을 한 번만 누르면 됩니다. Apple Developer 계정은 필요 없습니다.
+
+1. **Certificate Assistant** 실행:
+   ```bash
+   open "/System/Library/CoreServices/Certificate Assistant.app"
+   ```
+   > macOS 26 에서는 Keychain Access 를 열면 Passwords 앱으로 리다이렉트되고 **인증서 지원
+   > 메뉴가 없습니다.** 예전 문서의 `Keychain Access → 인증서 지원 → 인증서 생성…` 경로 대신
+   > Certificate Assistant 를 직접 띄우세요.
+2. **직접 인증서 생성(Create a Certificate for Yourself)** 선택
+3. 이름 `mongshell-menubar Dev` / 신원 유형 **자기 서명 루트** / 인증서 유형 **코드 서명**
+   - 유효기간 기본값은 365일 — 늘리려면 "기본값 무효화" 체크 후 `Validity Period` 에 `3650`
+   - `Key Usage` 는 `Signature` 만 (`Certificate Signing` 은 켜지 마세요),
+     `Extended Key Usage` 는 `Code Signing`, `Subject Alternate Name` 은 체크 해제
+   - 저장 위치 Keychain 은 **`login`**
+4. 확인 → `./scripts/make_app.sh`
+   ```bash
+   security find-identity -p codesigning   # -v 없이
+   ```
+
+`-v` 를 붙이면 `0 valid identities found` 로 나옵니다. 자기 서명 루트는 신뢰 앵커가 없어
+`CSSMERR_TP_NOT_TRUSTED` 로 분류되기 때문인데 **이 상태로도 문제없습니다** — `codesign` 은 신뢰
+체인을 요구하지 않고, 키체인 ACL 매칭도 리프 인증서 지문 비교라 신뢰 여부와 무관합니다. 따라서
+`security add-trusted-cert` 로 신뢰 설정을 건드릴 필요가 없습니다. `make_app.sh` 도 같은 이유로
+`-v` 없이 인증서를 찾습니다.
+
+이름을 다르게 지었으면 `SIGN_ID="<인증서 이름>" ./scripts/make_app.sh` 로 넘기세요. 서명이
+제대로 붙었는지는 이렇게 확인합니다 — `cdhash` 가 아니라 `certificate leaf` 가 나와야 합니다.
+```bash
+codesign -dvvv --requirements - mongshell-menubar.app
+```
+첫 서명 때 개인 키 접근 프롬프트가 한 번 뜨는데 여기서도 *항상 허용* 을 누르면 됩니다.
+배포용 `release.sh` 는 Developer ID 로 다시 서명하므로 영향받지 않습니다.
 
 테스트는 `swift test` 가 아니라 `scripts/test.sh` 입니다 — `swift test` 는 XCTest 나
 swift-testing 을 요구하는데 둘 다 Command Line Tools 에 들어 있지 않아서, Xcode 없이 빌드
