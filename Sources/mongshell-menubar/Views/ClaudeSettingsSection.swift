@@ -28,7 +28,7 @@ struct ClaudeSettingsSection: View {
         if let error = claude.lastError {
             Text(error)
                 .font(.caption)
-                .foregroundStyle(.red)
+                .foregroundStyle(Palette.errorText)
         }
 
         Picker("기본 모델", selection: claude.binding(\.model)) {
