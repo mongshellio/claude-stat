@@ -46,6 +46,12 @@ enum SnapshotRenderer {
                                                to dir: URL, _ name: String) {
         let win = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                            styleMask: [.titled], backing: .buffered, defer: false)
+        // Programmatic NSWindow defaults to isReleasedWhenClosed == true, so
+        // close() below would have AppKit release the window on top of ARC's
+        // own release of `win` — an over-release that crashes in the launch
+        // Apple Event's autorelease-pool drain (SIGSEGV after all PNGs are
+        // written).
+        win.isReleasedWhenClosed = false
         win.contentViewController = NSHostingController(rootView: view)
         win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
         win.orderFrontRegardless()
