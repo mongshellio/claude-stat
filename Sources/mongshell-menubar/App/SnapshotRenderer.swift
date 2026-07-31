@@ -121,11 +121,14 @@ private struct MenuBarStrip: View {
     }
 }
 
-/// The settings window as shipped.
+/// The settings window as shipped. The login-item model reads live system
+/// state, but the snapshot binary is unbundled and never registered, so the
+/// toggle renders deterministically off.
 private struct SettingsPreview: View {
     var body: some View {
         SettingsView(model: .shared, prefs: .shared,
-                     openClaw: .shared, claude: .shared)
+                     openClaw: .shared, claude: .shared,
+                     loginItem: LoginItemModel())
     }
 }
 

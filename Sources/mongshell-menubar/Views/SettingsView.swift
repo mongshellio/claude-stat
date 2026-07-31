@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var prefs: Preferences
     @ObservedObject var openClaw: OpenClawModel
     @ObservedObject var claude: ClaudeSettingsModel
+    @ObservedObject var loginItem: LoginItemModel
 
     private let intervals = [180, 300, 600, 900]
     private let openClawIntervals = [30, 60, 120]
@@ -18,6 +19,21 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("일반") {
+                // The system's Login Items list is the SSOT; the model only
+                // caches it, so the toggle reads through the model and writes
+                // through its method (no direct binding to flip).
+                Toggle("로그인 시 자동 실행", isOn: Binding(
+                    get: { loginItem.isEnabled },
+                    set: { loginItem.setEnabled($0) }
+                ))
+                if let error = loginItem.lastError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
             Section("메뉴바") {
                 // Live preview of the bar content with the current settings.
                 LabeledContent("미리보기") {
