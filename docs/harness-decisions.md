@@ -14,7 +14,7 @@
 
 ## Decision #12: 하네스 이식 시 `docs/design.md` 와 `.claude/browser-scenarios.md` 를 생략
 
-- **도입**: v1.x.x (#12)
+- **도입**: v1.1.0 (#12)
 - **컨텍스트**: 하네스 이식 가이드는 UI 프로젝트에 `docs/design.md`(UI/UX 의 "왜") 와 `.claude/browser-scenarios.md`(브라우저 검증 시나리오) 를 요구한다. 이 프로젝트는 UI 가 있지만 **웹이 아니라 macOS 네이티브 메뉴바 앱**이다.
 - **결정**: 두 문서를 만들지 않는다. 시각 검증 경로는 `MONGSHELL_SNAPSHOT` 스냅샷 렌더러이며 그 사용법은 [development.md](development.md) 가 권위다.
 - **이유**:
