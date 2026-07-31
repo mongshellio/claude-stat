@@ -30,7 +30,7 @@ struct SettingsView: View {
                 if let error = loginItem.lastError {
                     Text(error)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Palette.errorText)
                 }
             }
 

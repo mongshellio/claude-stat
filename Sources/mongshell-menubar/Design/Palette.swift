@@ -23,6 +23,11 @@ enum Palette {
     static let track     = Color.black.opacity(0.07)
     static let trackBar  = Color.black.opacity(0.08)
 
+    // System-appearance surfaces (settings window)
+    /// 에러 캡션 — 시스템 외관을 따르는 설정창용. 라이트 고정 팝오버의
+    /// `red`(고정 hex)와 달리 시스템 시맨틱 red 라 다크 모드에 적응한다.
+    static let errorText = Color.red
+
     // Accents
     static let onlineDot = Color(hex: 0x34C759)
     static let fablePurple = Color(hex: 0xAF52DE)
