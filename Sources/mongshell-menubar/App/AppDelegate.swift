@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let prefs = Preferences.shared
     private let openClaw = OpenClawModel.shared
     private let claude = ClaudeSettingsModel.shared
+    // Not a singleton: only the settings window observes it (Models/CLAUDE.md —
+    // 그 이유가 없는 상태는 소유자에게 주입).
+    private let loginItem = LoginItemModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // QA hook: render reference PNGs offscreen, then exit.
@@ -149,12 +152,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openSettings() {
         popover.performClose(nil)
+        // Re-read the login-item state on every open. The window (and its view
+        // hierarchy) is retained across closes, so `.onAppear` would fire only
+        // once — this is the reliable point to catch a change made directly in
+        // System Settings.
+        loginItem.refresh()
         if let win = settingsWindow {
             win.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = SettingsView(model: model, prefs: prefs, openClaw: openClaw, claude: claude)
+        let view = SettingsView(model: model, prefs: prefs, openClaw: openClaw,
+                                claude: claude, loginItem: loginItem)
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 380, height: 700),
             styleMask: [.titled, .closable],

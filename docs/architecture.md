@@ -22,6 +22,7 @@ non_goals:
 | 자격증명 | Security.framework Keychain (generic password) |
 | 설정 영속화 | `UserDefaults` (`@AppStorage`) |
 | 알림 | UserNotifications (앱 번들 필수) |
+| 로그인 항목 | ServiceManagement (`SMAppService.mainApp`) |
 | 외부 프로세스 | Foundation `Process` — `openclaw` CLI, `launchctl` |
 | 외부 패키지 의존성 | **없음** |
 

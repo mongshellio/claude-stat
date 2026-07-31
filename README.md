@@ -131,16 +131,18 @@ Sources/mongshell-menubar/
                             openclaw 신호등, 다크/라이트 적응, ≥90% 맥동
   Views/HoverSummaryView.swift hover 즉시 요약(5h/7d · 초기화 3열 Grid)
   Views/PopoverView.swift   라이트 팝오버 308px(5시간/주간/모델별 + openclaw 섹션)
-  Views/SettingsView.swift  색상·폴링·알림·Claude Code·openclaw·계정
+  Views/SettingsView.swift  일반(자동 실행)·색상·폴링·알림·Claude Code·openclaw·계정
   Views/ClaudeSettingsSection.swift  settings.json 편집 섹션(한글 설명 캡션)
   Design/Palette.swift      색 토큰 SSOT(사용량 3단계·팝오버 표면/텍스트)
   Models/…                  Preferences, UsageState, UsageModel(폴링/알림),
                             OpenClawHealth, OpenClawModel(Process 폴링/자동복구),
-                            ClaudeSettingsModel(settings.json ↔ 구조체)
+                            ClaudeSettingsModel(settings.json ↔ 구조체),
+                            LoginItemModel(로그인 항목 상태 캐시/안내)
   Services/…                Config, Credentials(Keychain), UsageAPIClient, AuthService(PKCE),
                             LoopbackServer(OAuth 루프백 리다이렉트 수신),
                             TimeText, OpenClawService(openclaw 셸아웃/프로브 파서),
-                            ClaudeSettingsStore(settings.json 입출력/파일 감시)
+                            ClaudeSettingsStore(settings.json 입출력/파일 감시),
+                            LoginItemService(SMAppService 로그인 항목 등록)
 ```
 
 ## 데이터 소스 & 인증

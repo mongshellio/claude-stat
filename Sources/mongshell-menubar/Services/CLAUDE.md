@@ -1,5 +1,5 @@
 ---
-role: "Sources/mongshell-menubar/Services/ 작성 규약의 단일 권위 — 외부 경계(네트워크·Keychain·파일·프로세스) 격리 규칙과 실패 처리 원칙. 상태 소유와 그리기는 다루지 않음."
+role: "Sources/mongshell-menubar/Services/ 작성 규약의 단일 권위 — 외부 경계(네트워크·Keychain·파일·프로세스·로그인 항목) 격리 규칙과 실패 처리 원칙. 상태 소유와 그리기는 다루지 않음."
 kind: operational
 non_goals:
   - "상태 소유·폴링 조율 (Models/CLAUDE.md)"
@@ -13,7 +13,7 @@ non_goals:
 
 ## 역할 경계
 
-**앱과 바깥 세계가 닿는 모든 지점이 여기 있다.** 이 디렉토리 밖에서 `URLSession`·`SecItem*`·`Process`·`FileManager` 쓰기·`NWListener` 를 부르지 않는다.
+**앱과 바깥 세계가 닿는 모든 지점이 여기 있다.** 이 디렉토리 밖에서 `URLSession`·`SecItem*`·`Process`·`FileManager` 쓰기·`NWListener`·`SMAppService` 를 부르지 않는다.
 
 | 경계 | 타입 |
 |---|---|
@@ -23,6 +23,7 @@ non_goals:
 | OAuth 흐름 | `AuthService`, `LoopbackServer` |
 | 사용자 설정 파일 | `ClaudeSettingsStore` |
 | 외부 CLI (`openclaw`, `launchctl`) | `OpenClawService` |
+| 로그인 항목 (ServiceManagement) | `LoginItemService` |
 
 `TimeText` 는 외부 경계가 아니라 포맷터다 — 위 타입들과 성격이 다르지만, 표시 문자열의 SSOT 을 한 곳에 두려고 여기 있다. 이 예외를 늘리지 않는다.
 
